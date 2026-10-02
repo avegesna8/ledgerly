@@ -1,0 +1,419 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AccountType {
+  CHECKING
+  SAVINGS
+  INVESTMENT
+  WALLET
+  CASH
+  STORED_CREDIT
+  LIABILITY
+  OTHER
+}
+
+enum SyncMethod {
+  MANUAL
+  IMPORT
+  PERIODIC
+  EVENT_DRIVEN
+}
+
+enum TransactionStatus {
+  PENDING
+  POSTED
+  NEEDS_REVIEW
+  CONFIRMED
+  RECONCILED
+  IGNORED
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+  TRANSFER
+  REFUND
+  REIMBURSEMENT
+  ADJUSTMENT
+}
+
+enum ReceiptStatus {
+  UNMATCHED
+  POTENTIAL_MATCH
+  MATCHED
+  CONFIRMED
+  REJECTED
+}
+
+model User {
+  id                     String                    @id @default(cuid())
+  email                  String                    @unique
+  name                   String?
+  trackingStartedAt      DateTime?
+  accounts               FinancialAccount[]
+  categories             Category[]
+  transactions           Transaction[]
+  integrations           IntegrationConnection[]
+  merchants              Merchant[]
+  receipts               Receipt[]
+  receiptSources         ReceiptSourceConnection[]
+  customAttributeOptions CustomAttributeOption[]
+  investmentSecurities   InvestmentSecurity[]
+  createdAt              DateTime                  @default(now())
+  updatedAt              DateTime                  @updatedAt
+}
+
+model CustomAttributeOption {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scope           String
+  attribute       String
+  label           String
+  normalizedLabel String
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([userId, scope, attribute, normalizedLabel])
+  @@index([userId, scope, attribute, isActive])
+}
+
+model FinancialAccount {
+  id                     String                   @id @default(cuid())
+  userId                 String
+  user                   User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name                   String
+  provider               String
+  type                   AccountType
+  currency               String                   @default("USD")
+  currentBalance         Decimal                  @db.Decimal(18, 2)
+  availableBalance       Decimal?                 @db.Decimal(18, 2)
+  withdrawable           Boolean                  @default(true)
+  includeInNetWorth      Boolean                  @default(true)
+  syncMethod             SyncMethod               @default(MANUAL)
+  lastSyncedAt           DateTime?
+  balanceSnapshots       AccountBalanceSnapshot[]
+  transactions           Transaction[]
+  providerAccountId      String?
+  mask                   String?
+  subtype                String?
+  isActive               Boolean                  @default(true)
+  integrationId          String?
+  integration            IntegrationConnection?   @relation(fields: [integrationId], references: [id], onDelete: SetNull)
+  investmentHoldings     InvestmentHolding[]
+  investmentTransactions InvestmentTransaction[]
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
+
+  @@unique([integrationId, providerAccountId])
+}
+
+model IntegrationConnection {
+  id                   String             @id @default(cuid())
+  userId               String
+  user                 User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider             String
+  providerConnectionId String
+  encryptedAccessToken String
+  institutionId        String?
+  institutionName      String?
+  syncCursor           String?
+  products             String[]           @default([])
+  newAccountsAvailable Boolean            @default(false)
+  needsAttention       Boolean            @default(false)
+  consentExpiresAt     DateTime?
+  status               String             @default("ACTIVE")
+  lastSyncedAt         DateTime?
+  accounts             FinancialAccount[]
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  @@unique([provider, providerConnectionId])
+  @@index([userId, provider])
+}
+
+model InvestmentSecurity {
+  id              String                  @id @default(cuid())
+  userId          String
+  user            User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plaidSecurityId String
+  name            String
+  tickerSymbol    String?
+  type            String?
+  closePrice      Decimal?                @db.Decimal(24, 8)
+  closePriceAsOf  DateTime?
+  currency        String                  @default("USD")
+  holdings        InvestmentHolding[]
+  transactions    InvestmentTransaction[]
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+
+  @@unique([userId, plaidSecurityId])
+  @@index([userId, type])
+}
+
+model InvestmentHolding {
+  id               String             @id @default(cuid())
+  accountId        String
+  account          FinancialAccount   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  securityId       String
+  security         InvestmentSecurity @relation(fields: [securityId], references: [id], onDelete: Cascade)
+  quantity         Decimal            @db.Decimal(28, 10)
+  institutionPrice Decimal?           @db.Decimal(24, 8)
+  institutionValue Decimal            @db.Decimal(18, 2)
+  costBasis        Decimal?           @db.Decimal(18, 2)
+  currency         String             @default("USD")
+  asOf             DateTime           @default(now())
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  @@unique([accountId, securityId])
+  @@index([accountId, institutionValue])
+}
+
+model InvestmentTransaction {
+  id                    String              @id @default(cuid())
+  accountId             String
+  account               FinancialAccount    @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  securityId            String?
+  security              InvestmentSecurity? @relation(fields: [securityId], references: [id], onDelete: SetNull)
+  providerTransactionId String
+  date                  DateTime
+  name                  String
+  type                  String
+  subtype               String?
+  amount                Decimal             @db.Decimal(18, 2)
+  quantity              Decimal?            @db.Decimal(28, 10)
+  price                 Decimal?            @db.Decimal(24, 8)
+  fees                  Decimal?            @db.Decimal(18, 2)
+  currency              String              @default("USD")
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  @@unique([accountId, providerTransactionId])
+  @@index([accountId, date])
+}
+
+model AccountBalanceSnapshot {
+  id               String           @id @default(cuid())
+  accountId        String
+  account          FinancialAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  balance          Decimal          @db.Decimal(18, 2)
+  availableBalance Decimal?         @db.Decimal(18, 2)
+  source           String
+  recordedAt       DateTime         @default(now())
+
+  @@index([accountId, recordedAt])
+}
+
+model Transaction {
+  id                    String             @id @default(cuid())
+  userId                String
+  user                  User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceAccountId       String
+  sourceAccount         FinancialAccount   @relation(fields: [sourceAccountId], references: [id])
+  providerTransactionId String?
+  transactedAt          DateTime
+  postedAt              DateTime?
+  merchantRaw           String
+  merchantNormalized    String?
+  merchantId            String?
+  merchant              Merchant?          @relation(fields: [merchantId], references: [id])
+  amount                Decimal            @db.Decimal(18, 2)
+  currency              String             @default("USD")
+  status                TransactionStatus  @default(POSTED)
+  type                  TransactionType
+  categoryId            String?
+  category              Category?          @relation(fields: [categoryId], references: [id])
+  receipt               Receipt?
+  aiClassifications     AiClassification[]
+  rawImportId           String?
+  rawImport             RawImport?         @relation(fields: [rawImportId], references: [id])
+  notes                 String?
+  authorizedAt          DateTime?
+  paymentChannel        String?
+  diningCuisine         String?
+  diningVenueType       String?
+  diningServiceStyle    String?
+  website               String?
+  logoUrl               String?
+  locationAddress       String?
+  locationCity          String?
+  locationRegion        String?
+  locationPostalCode    String?
+  locationCountry       String?
+  locationStoreNumber   String?
+  locationLatitude      Float?
+  locationLongitude     Float?
+  locationSource        String?
+  locationPlaceId       String?
+  locationMapsUrl       String?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+
+  @@unique([sourceAccountId, providerTransactionId])
+  @@index([userId, transactedAt])
+}
+
+model Receipt {
+  id                 String        @id @default(cuid())
+  userId             String
+  user               User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactionId      String?       @unique
+  transaction        Transaction?  @relation(fields: [transactionId], references: [id])
+  originalUrl        String
+  storageKey         String
+  originalFilename   String
+  mimeType           String
+  source             String        @default("UPLOAD")
+  sourceExternalId   String?
+  checksum           String
+  rawText            String?
+  merchant           String?
+  merchantId         String?
+  merchantRecord     Merchant?     @relation(fields: [merchantId], references: [id])
+  purchasedAt        DateTime?
+  total              Decimal?      @db.Decimal(18, 2)
+  tax                Decimal?      @db.Decimal(18, 2)
+  status             ReceiptStatus @default(UNMATCHED)
+  confidence         Float?
+  matchConfidence    Float?
+  extractedData      Json?
+  analysisConsentAt  DateTime?
+  purchaseChannel    String?
+  diningCuisine      String?
+  diningVenueType    String?
+  diningServiceStyle String?
+  locationAddress    String?
+  locationCity       String?
+  locationRegion     String?
+  locationPostalCode String?
+  locationCountry    String?
+  locationLatitude   Float?
+  locationLongitude  Float?
+  locationSource     String?
+  locationPlaceId    String?
+  locationMapsUrl    String?
+  items              ReceiptItem[]
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  @@unique([userId, checksum])
+  @@unique([source, sourceExternalId])
+  @@index([userId, status, createdAt])
+}
+
+model ReceiptSourceConnection {
+  id                    String    @id @default(cuid())
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider              String
+  externalAccountId     String
+  displayName           String?
+  encryptedAccessToken  String
+  encryptedRefreshToken String
+  scopes                String[]
+  configuration         Json?
+  tokenExpiresAt        DateTime?
+  cursor                String?
+  status                String    @default("ACTIVE")
+  lastSyncedAt          DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@unique([provider, externalAccountId])
+  @@index([userId, provider])
+}
+
+model Merchant {
+  id                    String        @id @default(cuid())
+  userId                String
+  user                  User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name                  String
+  plaidMerchantEntityId String?
+  website               String?
+  logoUrl               String?
+  transactions          Transaction[]
+  receipts              Receipt[]
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  @@unique([userId, plaidMerchantEntityId])
+  @@index([userId, name])
+}
+
+model ReceiptItem {
+  id             String    @id @default(cuid())
+  receiptId      String
+  receipt        Receipt   @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  rawName        String
+  normalizedName String?
+  quantity       Decimal?  @db.Decimal(10, 3)
+  price          Decimal   @db.Decimal(18, 2)
+  categoryId     String?
+  category       Category? @relation(fields: [categoryId], references: [id])
+}
+
+model Category {
+  id                String             @id @default(cuid())
+  userId            String
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name              String
+  isActive          Boolean            @default(true)
+  isSystem          Boolean            @default(false)
+  parentId          String?
+  parent            Category?          @relation("CategoryTree", fields: [parentId], references: [id])
+  children          Category[]         @relation("CategoryTree")
+  transactions      Transaction[]
+  receiptItems      ReceiptItem[]
+  aiClassifications AiClassification[]
+
+  @@unique([userId, parentId, name])
+}
+
+model AiClassification {
+  id                  String      @id @default(cuid())
+  transactionId       String
+  transaction         Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  suggestedCategoryId String
+  suggestedCategory   Category    @relation(fields: [suggestedCategoryId], references: [id])
+  confidence          Float
+  rationale           String
+  model               String
+  status              String      @default("SUGGESTED")
+  createdAt           DateTime    @default(now())
+
+  @@index([transactionId, createdAt])
+}
+
+model RawImport {
+  id           String        @id @default(cuid())
+  source       String
+  externalId   String?
+  payload      Json
+  checksum     String?
+  importedAt   DateTime      @default(now())
+  transactions Transaction[]
+
+  @@index([source, externalId])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  entityType String
+  entityId   String
+  action     String
+  actorType  String
+  before     Json?
+  after      Json?
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId, createdAt])
+}

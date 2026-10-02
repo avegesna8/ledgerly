@@ -1,0 +1,22 @@
+import { randomBytes } from "crypto";
+import { NextResponse } from "next/server";
+
+export async function GET(request: Request) {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  if (!clientId) return NextResponse.json({ error: "GOOGLE_CLIENT_ID is not configured." }, { status: 503 });
+  const redirectUri = process.env.GOOGLE_DRIVE_REDIRECT_URI || `${new URL(request.url).origin}/api/integrations/drive/callback`;
+  const state = randomBytes(24).toString("base64url");
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    response_type: "code",
+    access_type: "offline",
+    prompt: "consent",
+    include_granted_scopes: "true",
+    state,
+    scope: ["openid", "email", "https://www.googleapis.com/auth/drive.readonly"].join(" "),
+  });
+  const response = NextResponse.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params}`);
+  response.cookies.set("drive_oauth_state", state, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", maxAge: 600, path: "/" });
+  return response;
+}

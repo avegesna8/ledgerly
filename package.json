@@ -1,0 +1,46 @@
+{
+  "name": "ledgerly",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "db:seed": "node prisma/seed.mjs",
+    "db:seed-taxonomy": "node prisma/seed-taxonomy.mjs",
+    "db:clear-test-data": "node prisma/clear-test-data.mjs",
+    "db:clear-drive-receipts": "node prisma/clear-drive-receipts.mjs",
+    "db:start-tracking-now": "node prisma/start-tracking-now.mjs",
+    "plaid:add-test-transaction": "node prisma/add-test-transaction.mjs",
+    "db:studio": "prisma studio"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.mjs"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.16.3",
+    "date-fns": "^4.1.0",
+    "heic-convert": "^2.1.0",
+    "lucide-react": "^0.544.0",
+    "next": "^15.5.4",
+    "openai": "^6.49.0",
+    "plaid": "^47.0.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "react-plaid-link": "^5.0.0",
+    "recharts": "^3.2.1",
+    "sharp": "^0.35.5"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.3.1",
+    "@types/node": "^22.18.6",
+    "@types/react": "^19.1.16",
+    "@types/react-dom": "^19.1.9",
+    "eslint": "^9.36.0",
+    "eslint-config-next": "^15.5.4",
+    "prettier": "^3.9.9",
+    "prisma": "^6.16.3",
+    "typescript": "^5.9.2"
+  }
+}
