@@ -1,5 +1,12 @@
 # Ledgerly
 
+## Open on macOS
+
+Double-click **Open Ledgerly.command** in this folder. It checks PostgreSQL and
+the database, starts the local app, and opens `http://localhost:3000` in your
+default browser. Keep the Terminal window open while using Ledgerly and press
+Control-C there to stop it.
+
 A personal finance ledger designed to explain where every dollar is, how it moved, and what it was spent on.
 
 ## Run locally
