@@ -4,7 +4,21 @@ import { Area, AreaChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContaine
 import { netWorthHistory as demoHistory, spendingByCategory as demoSpending } from "@/lib/data";
 import type { ChartPoint, SpendingPoint } from "@/lib/types";
 
-const money = (value: number) => `$${value.toLocaleString("en-US")}`;
+const money = (value: number) =>
+  value.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
+const axisMoney = (value: number) => {
+  const absolute = Math.abs(value);
+  if (absolute >= 1_000_000)
+    return `$${(value / 1_000_000).toFixed(1)}m`;
+  if (absolute >= 10_000) return `$${(value / 1_000).toFixed(1)}k`;
+  return `$${Math.round(value).toLocaleString("en-US")}`;
+};
 
 export function NetWorthChart({ data = demoHistory }: { data?: ChartPoint[] }) {
   return (
@@ -13,7 +27,7 @@ export function NetWorthChart({ data = demoHistory }: { data?: ChartPoint[] }) {
         <defs><linearGradient id="moneyGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#264c40" stopOpacity={0.22}/><stop offset="95%" stopColor="#264c40" stopOpacity={0}/></linearGradient></defs>
         <CartesianGrid vertical={false} stroke="#ebe7de" strokeDasharray="3 5" />
         <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: "#8b8981", fontSize: 12 }} dy={8} />
-        <YAxis axisLine={false} tickLine={false} tick={{ fill: "#8b8981", fontSize: 11 }} tickFormatter={(v) => `$${Math.round(v / 1000)}k`} domain={["auto", "auto"]} />
+        <YAxis axisLine={false} tickLine={false} tick={{ fill: "#8b8981", fontSize: 11 }} tickFormatter={axisMoney} domain={["auto", "auto"]} width={62} />
         <Tooltip formatter={(v) => money(Number(v))} contentStyle={{ border: 0, borderRadius: 10, boxShadow: "0 8px 24px #22352d1a", fontSize: 12 }} />
         <Area type="monotone" dataKey="value" stroke="#264c40" strokeWidth={2.5} fill="url(#moneyGradient)" dot={{ r: 3, fill: "#264c40", stroke: "#fff", strokeWidth: 2 }} activeDot={{ r: 5, fill: "#264c40", stroke: "#fff", strokeWidth: 3 }} />
       </AreaChart>

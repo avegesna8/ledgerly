@@ -1034,7 +1034,10 @@ export function AnalyticsPage({
               <span className="label">Growth</span>
               <h3>Net worth over time</h3>
             </div>
-            <button className="period">Balance history</button>
+            <div className="chart-current-total">
+              <small>Current net worth</small>
+              <strong>{money(metrics.netWorth)}</strong>
+            </div>
           </div>
           {metrics.netWorthHistory.length ? (
             <NetWorthChart data={metrics.netWorthHistory} />
