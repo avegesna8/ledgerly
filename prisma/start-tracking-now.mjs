@@ -24,21 +24,65 @@ try {
   await mkdir(receiptDirectory, { recursive: true });
 
   const removed = await prisma.$transaction(async (database) => {
+    const [transactionsToRemove, receiptsToRemove, accounts] = await Promise.all([
+      database.transaction.findMany({
+        where: { userId: user.id },
+        select: { id: true, rawImportId: true },
+      }),
+      database.receipt.findMany({
+        where: { userId: user.id },
+        select: { id: true },
+      }),
+      database.financialAccount.findMany({
+        where: { userId: user.id },
+        select: { id: true },
+      }),
+    ]);
+    const entityIds = [
+      ...transactionsToRemove.map(({ id }) => id),
+      ...receiptsToRemove.map(({ id }) => id),
+    ];
+    const rawImportIds = transactionsToRemove
+      .map(({ rawImportId }) => rawImportId)
+      .filter((id) => id !== null);
+
+    const removedAuditLogs = entityIds.length
+      ? await database.auditLog.deleteMany({ where: { entityId: { in: entityIds } } })
+      : { count: 0 };
     const removedReceipts = await database.receipt.deleteMany({ where: { userId: user.id } });
     const removedTransactions = await database.transaction.deleteMany({ where: { userId: user.id } });
+    const removedRawImports = rawImportIds.length
+      ? await database.rawImport.deleteMany({ where: { id: { in: rawImportIds } } })
+      : { count: 0 };
+    const removedOrphanRawImports = await database.rawImport.deleteMany({
+      where: { transactions: { none: {} } },
+    });
+    const removedMerchants = await database.merchant.deleteMany({ where: { userId: user.id } });
+    const removedBalanceSnapshots = accounts.length
+      ? await database.accountBalanceSnapshot.deleteMany({
+          where: { accountId: { in: accounts.map(({ id }) => id) } },
+        })
+      : { count: 0 };
     await database.integrationConnection.updateMany({
       where: { userId: user.id, provider: "PLAID" },
-      data: { syncCursor: null },
+      data: { syncCursor: null, lastSyncedAt: null },
     });
     await database.receiptSourceConnection.updateMany({
       where: { userId: user.id },
-      data: { lastSyncedAt: null },
+      data: { cursor: null, lastSyncedAt: null },
     });
     await database.user.update({
       where: { id: user.id },
       data: { trackingStartedAt: requestedStart },
     });
-    return { receipts: removedReceipts.count, transactions: removedTransactions.count };
+    return {
+      receipts: removedReceipts.count,
+      transactions: removedTransactions.count,
+      rawImports: removedRawImports.count + removedOrphanRawImports.count,
+      merchants: removedMerchants.count,
+      auditLogs: removedAuditLogs.count,
+      bankBalanceSnapshots: removedBalanceSnapshots.count,
+    };
   });
 
   console.log(JSON.stringify({ trackingStartedAt: requestedStart.toISOString(), removed, receiptFilesBackup: backupPath }, null, 2));
