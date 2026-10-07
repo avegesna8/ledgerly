@@ -46,11 +46,37 @@ export type FinanceAnswer = {
 const money = (value: number) =>
   value.toLocaleString("en-US", { style: "currency", currency: "USD" });
 
+function easternToday() {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const value = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? "";
+  return `${value("year")}-${value("month")}-${value("day")}`;
+}
+
+function hasDateIntent(question: string) {
+  return /\b(?:19|20)\d{2}\b|\b(?:today|yesterday|week|month|year|quarter|since|before|after|between|from|during|recent|last|past|date|january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\b/i.test(
+    question,
+  );
+}
+
+function validDate(value: string | null) {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value
+    ? null
+    : value;
+}
+
 async function planQuestion(question: string): Promise<Plan> {
   if (!process.env.OPENAI_API_KEY)
     throw new Error("OPENAI_API_KEY is not configured.");
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  const today = new Date().toISOString().slice(0, 10);
+  const today = easternToday();
   const year = today.slice(0, 4);
   const response = await client.responses.create({
     model:
@@ -129,7 +155,18 @@ async function planQuestion(question: string): Promise<Plan> {
   });
   if (!response.output_text)
     throw new Error("The finance assistant returned no plan.");
-  return JSON.parse(response.output_text) as Plan;
+  const plan = JSON.parse(response.output_text) as Plan;
+  if (!hasDateIntent(question)) {
+    plan.start_date = null;
+    plan.end_date = null;
+  } else {
+    plan.start_date = validDate(plan.start_date);
+    plan.end_date = validDate(plan.end_date);
+    if (plan.start_date && plan.end_date && plan.start_date > plan.end_date) {
+      [plan.start_date, plan.end_date] = [plan.end_date, plan.start_date];
+    }
+  }
+  return plan;
 }
 
 function matchingCategoryIds(
@@ -157,18 +194,22 @@ function matchingCategoryIds(
 
 function dateBounds(plan: Plan, trackingStartedAt: Date | null) {
   const trackingDay = trackingStartDay(trackingStartedAt);
+  const today = easternToday();
   const start =
     [plan.start_date, trackingDay]
       .filter((value): value is string => Boolean(value))
       .sort()
       .at(-1) ?? null;
-  const end = plan.end_date ?? new Date().toISOString().slice(0, 10);
+  const requestedEnd = validDate(plan.end_date);
+  const end = requestedEnd && requestedEnd <= today ? requestedEnd : today;
+  const hasTrackedOverlap = !start || start <= end;
   return {
     start,
     end,
     startDate: start ? new Date(`${start}T00:00:00.000Z`) : undefined,
     endDate: new Date(`${end}T23:59:59.999Z`),
     trackingDay,
+    hasTrackedOverlap,
   };
 }
 
@@ -188,7 +229,9 @@ export async function answerFinanceQuestion(
   const scope =
     plan.dataset === "investments"
       ? `${plan.start_date ?? "available history"} through ${plan.end_date ?? "today"}`
-      : `${bounds.start ?? "available tracked history"} through ${bounds.end}`;
+      : bounds.hasTrackedOverlap
+        ? `${bounds.start ?? "available tracked history"} through ${bounds.end}`
+        : `${plan.start_date ?? "requested period"} through ${bounds.end} · before tracking began ${bounds.trackingDay}`;
 
   const categoryIds = matchingCategoryIds(user.categories, plan.category_query);
 
@@ -537,7 +580,7 @@ export async function answerFinanceQuestion(
       ? new Date(`${plan.start_date}T00:00:00.000Z`)
       : undefined;
     const endDate = new Date(
-      `${plan.end_date ?? new Date().toISOString().slice(0, 10)}T23:59:59.999Z`,
+      `${plan.end_date ?? easternToday()}T23:59:59.999Z`,
     );
     const activities = await prisma.investmentTransaction.findMany({
       where: {
