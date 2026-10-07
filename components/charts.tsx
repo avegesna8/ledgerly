@@ -15,7 +15,7 @@ export function NetWorthChart({ data = demoHistory }: { data?: ChartPoint[] }) {
         <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: "#8b8981", fontSize: 12 }} dy={8} />
         <YAxis axisLine={false} tickLine={false} tick={{ fill: "#8b8981", fontSize: 11 }} tickFormatter={(v) => `$${Math.round(v / 1000)}k`} domain={["auto", "auto"]} />
         <Tooltip formatter={(v) => money(Number(v))} contentStyle={{ border: 0, borderRadius: 10, boxShadow: "0 8px 24px #22352d1a", fontSize: 12 }} />
-        <Area type="monotone" dataKey="value" stroke="#264c40" strokeWidth={2.5} fill="url(#moneyGradient)" activeDot={{ r: 5, fill: "#264c40", stroke: "#fff", strokeWidth: 3 }} />
+        <Area type="monotone" dataKey="value" stroke="#264c40" strokeWidth={2.5} fill="url(#moneyGradient)" dot={{ r: 3, fill: "#264c40", stroke: "#fff", strokeWidth: 2 }} activeDot={{ r: 5, fill: "#264c40", stroke: "#fff", strokeWidth: 3 }} />
       </AreaChart>
     </ResponsiveContainer>
   );

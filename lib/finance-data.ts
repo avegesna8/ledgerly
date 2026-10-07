@@ -68,6 +68,7 @@ export async function getDashboardData(): Promise<{
     },
   });
   if (!user) throw new Error("Local user not found. Run npm run db:seed.");
+  type DashboardAccount = (typeof user.accounts)[number];
   const categoriesById = new Map(
     user.categories.map((category) => [category.id, category]),
   );
@@ -177,28 +178,64 @@ export async function getDashboardData(): Promise<{
       value,
       color: palette[index % palette.length],
     }));
-  const netWorthHistory = [
-    ...new Set(
-      snapshots.map((snapshot) => format(snapshot.recordedAt, "yyyy-MM")),
-    ),
-  ].map((key) => {
-    const monthSnapshots = snapshots.filter(
-      (snapshot) =>
-        format(snapshot.recordedAt, "yyyy-MM") === key &&
-        snapshot.account.includeInNetWorth,
+  const currentMonthKey = format(now, "yyyy-MM");
+  const isRetirementAccount = (account: DashboardAccount) =>
+    /401\s*\(?k\)?|403\s*\(?b\)?|457|retirement|ira|pension/i.test(
+      account.name,
     );
-    const latestByAccount = new Map<string, (typeof monthSnapshots)[number]>();
-    monthSnapshots.forEach((snapshot) =>
-      latestByAccount.set(snapshot.accountId, snapshot),
+  const balanceHistory = (
+    includeAccount: (account: DashboardAccount) => boolean,
+  ) => {
+    const eligibleAccounts = user.accounts.filter(includeAccount);
+    const eligibleIds = new Set(eligibleAccounts.map((account) => account.id));
+    const relevantSnapshots = snapshots.filter((snapshot) =>
+      eligibleIds.has(snapshot.accountId),
     );
-    return {
-      month: format(new Date(`${key}-15T12:00:00`), "MMM"),
-      value: [...latestByAccount.values()].reduce(
-        (sum, snapshot) => sum + Number(snapshot.balance),
-        0,
-      ),
-    };
-  });
+    const monthKeys = [
+      ...new Set([
+        ...relevantSnapshots.map((snapshot) =>
+          format(snapshot.recordedAt, "yyyy-MM"),
+        ),
+        currentMonthKey,
+      ]),
+    ].sort();
+
+    return monthKeys.map((key) => {
+      const value =
+        key === currentMonthKey
+          ? eligibleAccounts.reduce(
+              (sum, account) => sum + Number(account.currentBalance),
+              0,
+            )
+          : eligibleAccounts.reduce((sum, account) => {
+              const latest = relevantSnapshots
+                .filter(
+                  (snapshot) =>
+                    snapshot.accountId === account.id &&
+                    format(snapshot.recordedAt, "yyyy-MM") <= key,
+                )
+                .at(-1);
+              return sum + (latest ? Number(latest.balance) : 0);
+            }, 0);
+      return {
+        month: format(new Date(`${key}-15T12:00:00`), "MMM yy"),
+        value,
+      };
+    });
+  };
+  const netWorthHistory = balanceHistory(
+    (account) => account.includeInNetWorth,
+  );
+  const investmentValueHistory = balanceHistory(
+    (account) => account.type === "INVESTMENT",
+  );
+  const brokerageValueHistory = balanceHistory(
+    (account) =>
+      account.type === "INVESTMENT" && !isRetirementAccount(account),
+  );
+  const retirementValueHistory = balanceHistory(
+    (account) => account.type === "INVESTMENT" && isRetirementAccount(account),
+  );
   const netWorth = user.accounts
     .filter((account) => account.includeInNetWorth)
     .reduce((sum, account) => sum + Number(account.currentBalance), 0);
@@ -421,6 +458,9 @@ export async function getDashboardData(): Promise<{
         gainPercent: totalCostBasis ? (totalGain / totalCostBasis) * 100 : 0,
         contributions,
         withdrawals,
+        valueHistory: investmentValueHistory,
+        brokerageValueHistory,
+        retirementValueHistory,
         allocation: [...allocationTotals.entries()]
           .sort((a, b) => b[1] - a[1])
           .map(([name, value], index) => ({

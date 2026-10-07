@@ -148,6 +148,9 @@ export type InvestmentDashboard = {
   gainPercent: number;
   contributions: number;
   withdrawals: number;
+  valueHistory: ChartPoint[];
+  brokerageValueHistory: ChartPoint[];
+  retirementValueHistory: ChartPoint[];
   allocation: SpendingPoint[];
   holdings: InvestmentHoldingData[];
   activities: InvestmentActivityData[];

@@ -546,6 +546,12 @@ export function InvestmentsPage({
     (sum, account) => sum + account.balance,
     0,
   );
+  const visibleValueHistory =
+    investmentView === "retirement"
+      ? investments.retirementValueHistory
+      : investmentView === "brokerage"
+        ? investments.brokerageValueHistory
+        : investments.valueHistory;
   const investmentConnections = plaidConnections.filter(
     (connection) =>
       connection.products.includes("INVESTMENTS") ||
@@ -700,6 +706,28 @@ export function InvestmentsPage({
             </div>
           </article>
         )}
+      <article className="card chart-card investment-growth-card">
+        <div className="card-head">
+          <div>
+            <span className="label">GROWTH</span>
+            <h3>
+              {investmentView === "retirement"
+                ? "Retirement value over time"
+                : investmentView === "brokerage"
+                  ? "Brokerage value over time"
+                  : "Portfolio value over time"}
+            </h3>
+          </div>
+          <span className="period">Monthly balance</span>
+        </div>
+        <NetWorthChart data={visibleValueHistory} />
+        {visibleValueHistory.length === 1 && (
+          <p className="chart-footnote">
+            Today is the first portfolio snapshot. Daily syncs will build the
+            monthly growth line from here.
+          </p>
+        )}
+      </article>
       <div className="investment-grid">
         <article className="card chart-card">
           <div className="card-head">
@@ -1008,7 +1036,14 @@ export function AnalyticsPage({
             </div>
             <button className="period">Balance history</button>
           </div>
-          <NetWorthChart data={metrics.netWorthHistory} />
+          {metrics.netWorthHistory.length ? (
+            <NetWorthChart data={metrics.netWorthHistory} />
+          ) : (
+            <div className="empty-state chart-empty">
+              <strong>No balance history yet</strong>
+              <p>Your next account sync will create the first point.</p>
+            </div>
+          )}
         </article>
         <article className="card chart-card">
           <div className="card-head">

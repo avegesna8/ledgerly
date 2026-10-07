@@ -1808,6 +1808,15 @@ button {
   gap: 14px;
   margin-bottom: 14px;
 }
+.investment-growth-card {
+  margin-bottom: 14px;
+}
+.chart-footnote {
+  margin: -2px 0 2px;
+  color: #8d928e;
+  font-size: 9px;
+  text-align: center;
+}
 .cross-account-flow {
   display: grid;
   grid-template-columns: 1fr auto 1fr auto 1fr auto 1fr;
