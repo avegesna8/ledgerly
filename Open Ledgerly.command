@@ -1,6 +1,7 @@
 #!/bin/zsh
 
 set -u
+unsetopt BG_NICE 2>/dev/null || true
 
 PROJECT_DIR="$(cd -- "$(dirname -- "$0")" && pwd)"
 APP_URL="http://localhost:3000"
@@ -76,8 +77,33 @@ npx prisma migrate deploy || {
   exit 1
 }
 
-echo "Starting the app..."
-npm run dev &
+echo "Preparing the app..."
+
+# Build on the first launch and whenever application source is newer than the
+# last successful build. Normal later launches can reuse the production build.
+NEEDS_BUILD="false"
+if [[ ! -f .next/BUILD_ID ]]; then
+  NEEDS_BUILD="true"
+elif find app components lib prisma types \
+  next.config.ts package.json package-lock.json tsconfig.json \
+  -newer .next/BUILD_ID -print -quit 2>/dev/null | grep -q .; then
+  NEEDS_BUILD="true"
+fi
+
+if [[ "$NEEDS_BUILD" == "true" ]]; then
+  echo "Refreshing the generated Next.js cache..."
+  rm -rf -- "$PROJECT_DIR/.next"
+  echo "Building Ledgerly (the first launch can take about a minute)..."
+  npm run build || {
+    read "?Ledgerly could not be built. Review the error above, then press Return to close..."
+    exit 1
+  }
+else
+  echo "Using the existing Ledgerly build."
+fi
+
+echo "Starting Ledgerly..."
+npm run start &
 SERVER_PID=$!
 
 for attempt in {1..60}; do
