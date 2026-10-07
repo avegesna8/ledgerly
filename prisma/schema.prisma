@@ -86,31 +86,32 @@ model CustomAttributeOption {
 }
 
 model FinancialAccount {
-  id                     String                   @id @default(cuid())
-  userId                 String
-  user                   User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name                   String
-  provider               String
-  type                   AccountType
-  currency               String                   @default("USD")
-  currentBalance         Decimal                  @db.Decimal(18, 2)
-  availableBalance       Decimal?                 @db.Decimal(18, 2)
-  withdrawable           Boolean                  @default(true)
-  includeInNetWorth      Boolean                  @default(true)
-  syncMethod             SyncMethod               @default(MANUAL)
-  lastSyncedAt           DateTime?
-  balanceSnapshots       AccountBalanceSnapshot[]
-  transactions           Transaction[]
-  providerAccountId      String?
-  mask                   String?
-  subtype                String?
-  isActive               Boolean                  @default(true)
-  integrationId          String?
-  integration            IntegrationConnection?   @relation(fields: [integrationId], references: [id], onDelete: SetNull)
-  investmentHoldings     InvestmentHolding[]
-  investmentTransactions InvestmentTransaction[]
-  createdAt              DateTime                 @default(now())
-  updatedAt              DateTime                 @updatedAt
+  id                         String                      @id @default(cuid())
+  userId                     String
+  user                       User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name                       String
+  provider                   String
+  type                       AccountType
+  currency                   String                      @default("USD")
+  currentBalance             Decimal                     @db.Decimal(18, 2)
+  availableBalance           Decimal?                    @db.Decimal(18, 2)
+  withdrawable               Boolean                     @default(true)
+  includeInNetWorth          Boolean                     @default(true)
+  syncMethod                 SyncMethod                  @default(MANUAL)
+  lastSyncedAt               DateTime?
+  balanceSnapshots           AccountBalanceSnapshot[]
+  transactions               Transaction[]
+  providerAccountId          String?
+  mask                       String?
+  subtype                    String?
+  isActive                   Boolean                     @default(true)
+  integrationId              String?
+  integration                IntegrationConnection?      @relation(fields: [integrationId], references: [id], onDelete: SetNull)
+  investmentHoldings         InvestmentHolding[]
+  investmentHoldingSnapshots InvestmentHoldingSnapshot[]
+  investmentTransactions     InvestmentTransaction[]
+  createdAt                  DateTime                    @default(now())
+  updatedAt                  DateTime                    @updatedAt
 
   @@unique([integrationId, providerAccountId])
 }
@@ -140,20 +141,21 @@ model IntegrationConnection {
 }
 
 model InvestmentSecurity {
-  id              String                  @id @default(cuid())
-  userId          String
-  user            User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  plaidSecurityId String
-  name            String
-  tickerSymbol    String?
-  type            String?
-  closePrice      Decimal?                @db.Decimal(24, 8)
-  closePriceAsOf  DateTime?
-  currency        String                  @default("USD")
-  holdings        InvestmentHolding[]
-  transactions    InvestmentTransaction[]
-  createdAt       DateTime                @default(now())
-  updatedAt       DateTime                @updatedAt
+  id               String                      @id @default(cuid())
+  userId           String
+  user             User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plaidSecurityId  String
+  name             String
+  tickerSymbol     String?
+  type             String?
+  closePrice       Decimal?                    @db.Decimal(24, 8)
+  closePriceAsOf   DateTime?
+  currency         String                      @default("USD")
+  holdings         InvestmentHolding[]
+  holdingSnapshots InvestmentHoldingSnapshot[]
+  transactions     InvestmentTransaction[]
+  createdAt        DateTime                    @default(now())
+  updatedAt        DateTime                    @updatedAt
 
   @@unique([userId, plaidSecurityId])
   @@index([userId, type])
@@ -176,6 +178,25 @@ model InvestmentHolding {
 
   @@unique([accountId, securityId])
   @@index([accountId, institutionValue])
+}
+
+model InvestmentHoldingSnapshot {
+  id               String             @id @default(cuid())
+  accountId        String
+  account          FinancialAccount   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  securityId       String
+  security         InvestmentSecurity @relation(fields: [securityId], references: [id], onDelete: Cascade)
+  quantity         Decimal            @db.Decimal(28, 10)
+  institutionPrice Decimal?           @db.Decimal(24, 8)
+  institutionValue Decimal            @db.Decimal(18, 2)
+  costBasis        Decimal?           @db.Decimal(18, 2)
+  currency         String             @default("USD")
+  recordedOn       DateTime           @db.Date
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  @@unique([accountId, securityId, recordedOn])
+  @@index([accountId, recordedOn])
 }
 
 model InvestmentTransaction {

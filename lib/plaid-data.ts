@@ -17,11 +17,15 @@ type PlaidAccount = {
   };
 };
 
-export function financialAccountType(type: string, subtype: string | null): AccountType {
+export function financialAccountType(
+  type: string,
+  subtype: string | null,
+): AccountType {
   if (type === "investment" || type === "brokerage") return "INVESTMENT";
   if (type === "credit" || type === "loan") return "LIABILITY";
   if (subtype === "checking") return "CHECKING";
-  if (["savings", "money market", "cd"].includes(subtype ?? "")) return "SAVINGS";
+  if (["savings", "money market", "cd"].includes(subtype ?? ""))
+    return "SAVINGS";
   return "OTHER";
 }
 
@@ -96,15 +100,24 @@ export async function upsertPlaidAccounts({
   return saved;
 }
 
-export async function syncInvestmentData(connection: IntegrationConnection, userId: string) {
+export async function syncInvestmentData(
+  connection: IntegrationConnection,
+  userId: string,
+) {
   const accessToken = decryptToken(connection.encryptedAccessToken);
-  const holdingsResponse = await plaid.investmentsHoldingsGet({ access_token: accessToken });
+  const snapshotDate = new Date();
+  snapshotDate.setUTCHours(0, 0, 0, 0);
+  const holdingsResponse = await plaid.investmentsHoldingsGet({
+    access_token: accessToken,
+  });
   const accounts = await upsertPlaidAccounts({
     userId,
     connection,
     accounts: holdingsResponse.data.accounts as PlaidAccount[],
   });
-  const accountByProviderId = new Map(accounts.map((account) => [account.providerAccountId, account]));
+  const accountByProviderId = new Map(
+    accounts.map((account) => [account.providerAccountId, account]),
+  );
   const securityByProviderId = new Map<string, string>();
 
   for (const security of holdingsResponse.data.securities) {
@@ -169,6 +182,32 @@ export async function syncInvestmentData(connection: IntegrationConnection, user
         currency: holding.iso_currency_code ?? "USD",
       },
     });
+    await prisma.investmentHoldingSnapshot.upsert({
+      where: {
+        accountId_securityId_recordedOn: {
+          accountId: account.id,
+          securityId,
+          recordedOn: snapshotDate,
+        },
+      },
+      update: {
+        quantity: holding.quantity,
+        institutionPrice: holding.institution_price,
+        institutionValue: holding.institution_value,
+        costBasis: holding.cost_basis,
+        currency: holding.iso_currency_code ?? "USD",
+      },
+      create: {
+        accountId: account.id,
+        securityId,
+        quantity: holding.quantity,
+        institutionPrice: holding.institution_price,
+        institutionValue: holding.institution_value,
+        costBasis: holding.cost_basis,
+        currency: holding.iso_currency_code ?? "USD",
+        recordedOn: snapshotDate,
+      },
+    });
   }
   for (const account of accounts.filter((item) => item.type === "INVESTMENT")) {
     const seen = [...(seenByAccount.get(account.id) ?? new Set<string>())];
@@ -196,7 +235,7 @@ export async function syncInvestmentData(connection: IntegrationConnection, user
       const account = accountByProviderId.get(transaction.account_id);
       if (!account) continue;
       const securityId = transaction.security_id
-        ? securityByProviderId.get(transaction.security_id) ?? null
+        ? (securityByProviderId.get(transaction.security_id) ?? null)
         : null;
       await prisma.investmentTransaction.upsert({
         where: {
@@ -235,7 +274,11 @@ export async function syncInvestmentData(connection: IntegrationConnection, user
       importedTransactions++;
     }
     offset += response.data.investment_transactions.length;
-    if (offset >= response.data.total_investment_transactions || !response.data.investment_transactions.length) break;
+    if (
+      offset >= response.data.total_investment_transactions ||
+      !response.data.investment_transactions.length
+    )
+      break;
   }
   await prisma.integrationConnection.update({
     where: { id: connection.id },
@@ -246,5 +289,8 @@ export async function syncInvestmentData(connection: IntegrationConnection, user
       lastSyncedAt: new Date(),
     },
   });
-  return { holdings: holdingsResponse.data.holdings.length, investmentTransactions: importedTransactions };
+  return {
+    holdings: holdingsResponse.data.holdings.length,
+    investmentTransactions: importedTransactions,
+  };
 }
